@@ -31,7 +31,7 @@ class Scrapper:
         if gender not in self.VALID_GENDERS:
             raise ValueError(f'gender argument must be in {self.VALID_GENDERS}')
         
-        self.start_uri = f"https://en.volleyballworld.com/volleyball/competitions/volleyball-nations-league/{year}/schedule/#fromDate={from_date}1&gender={gender}"
+        self.start_uri = f"https://en.volleyballworld.com/volleyball/competitions/volleyball-nations-league/{year}/schedule/#fromDate={from_date}&gender={gender}"
         self.match_id = initial_mid
         self.gender = gender
 
@@ -212,7 +212,7 @@ class Scrapper:
                 '//*[@id="main-content"]/section/div/div/div[2]/div/a[1]/div[2]/div[1]'
             ).text.split(' - ')
 
-            pool = re.sub('\D+', '', pool)
+            pool = pool.replace('Pool ', '')
             matchN = re.sub('\D+', '', matchN)
             arena = re.sub(
                 r'\n', 
@@ -340,7 +340,7 @@ class Scrapper:
 
 
 if __name__ == '__main__':
-    app = Scrapper(year=2023, from_date='2023-05-30')
+    app = Scrapper(year=2023, from_date='2023-05-30', initial_mid=229)
     try:
         app.run()
     finally:
