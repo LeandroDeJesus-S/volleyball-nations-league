@@ -17,7 +17,7 @@ import logging
 
 class Scraper:
     VALID_GENDERS = ('men', 'women')
-    def __init__(self, year: int, from_date: str, initial_mid: int=1, gender: Literal['men', 'woman']='women') -> None:
+    def __init__(self, year: int, from_date: str, initial_mid: int=1, gender: Literal['men', 'woman']='women', headless=True) -> None:
         """
         Args:
             year (int): year of the competition.
@@ -42,6 +42,9 @@ class Scraper:
         self.players_dataframe_name = f'{self.gender}_players_stats_{year}_{datetime.now().date()}.xlsx'
 
         options = Options()
+        if headless:
+            options.add_argument('--headless')
+        
         service = Service('msedgedriver.exe')
         
         self.browser = Edge(options=options, service=service)
@@ -338,10 +341,17 @@ class Scraper:
             self.logger.error(str(e))
             return False
 
+    @classmethod
+    def multiple_years(cls, years: list[int], dates: list[str], **kwargs):
+        """Scrape data for multiple years.
 
-if __name__ == '__main__':
-    app = Scraper(year=2023, from_date='2023-05-30', initial_mid=229)
-    try:
-        app.run()
-    finally:
-        app.quit_browser()
+        Args:
+            years (list[int]): list of the years
+            dates (list[str]): list of initial dates
+        
+        Ex:
+        >>> Scraper.multiple_years(years=[2021, 2022], dates=['2021-05-25', '2022-05-31'])
+        """
+        for year, date in zip(years, dates):
+            self = cls(year=year, date=date, **kwargs)
+            self.run()
