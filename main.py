@@ -70,7 +70,6 @@ class Scrapper:
         self.browser.maximize_window()
 
         self.close_cookie_request()
-        self.browser.implicitly_wait(5)
         
         self.get_match_links()
         self.parse_matches()
@@ -205,9 +204,9 @@ class Scrapper:
         and self.players_dataframe
         """
         for mid, match_url in enumerate(self.all_match_links, self.match_id):
-            self.browser.get(match_url)    
-            self.browser.implicitly_wait(5)
-
+            self.browser.get(match_url)
+            sleep(3)
+            
             pool, phase, matchN = self.find_waiting(
                 'xpath', 
                 '//*[@id="main-content"]/section/div/div/div[2]/div/a[1]/div[2]/div[1]'
@@ -320,8 +319,6 @@ class Scrapper:
             self.players_dataframe = pd.concat([self.players_dataframe, self.players_df_conc])
             self.logger.info('players_dataframe concatenated')
             self.logger.info(self.players_dataframe.head(1))
-
-            self.browser.implicitly_wait(5)
 
     def save_dfs(self) -> bool:
         """Save the DataFrame from scraped data to excel format;
