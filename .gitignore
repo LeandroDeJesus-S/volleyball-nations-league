@@ -1,5 +1,10 @@
-Driver_Notes/
-venv/
+*/
 *.zip
 *.exe
 *.txt
+*.log
+*.mwb
+*.xlsx
+*.ipynb
+*.log
+test.py

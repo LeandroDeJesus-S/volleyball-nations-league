@@ -4,106 +4,279 @@ from selenium.webdriver.edge.service import Service
 import selenium.webdriver.support.expected_conditions as EC
 from selenium.webdriver.support.wait import WebDriverWait
 from selenium.webdriver.common.by import By
+from selenium.common.exceptions import StaleElementReferenceException
+from datetime import datetime
+from time import sleep
+
 import re
 import pandas as pd
-
-start_uri = "https://en.volleyballworld.com/volleyball/competitions/volleyball-nations-league/2021/schedule/#fromDate=2021-05-25"
-match_id = 1
-options = Options()
-service = Service('msedgedriver.exe')
-browser = Edge(options=options, service=service)
-
-browser.get(start_uri)
-browser.implicitly_wait(5)
-
-# click to close cookies request
-browser.execute_script(
-    'arguments[0].click();',
-    browser.find_element('xpath', '//*[@id="onetrust-close-btn-container"]/button')
-)
-
-# click to open gender dropdown
-browser.execute_script(
-    'arguments[0].click();',
-    browser.find_element(By.XPATH, '/html/body/div[1]/main/section/div[1]/div/div[3]/div[2]/div[1]/div/div[3]/div')
-)
-
-# select 'woman' in dropdown
-browser.execute_script(
-    'arguments[0].click();',
-    browser.find_element('xpath', '/html/body/div[1]/main/section/div[1]/div/div[3]/div[2]/div[1]/div/div[3]/ul/li[2]')
-)
-
-# get all cards of matches
-matches_card = browser.find_element(
-    By.CSS_SELECTOR, 
-    'div.vbw-gs2-match-data-card'
-)
-
-match_url = matches_card.find_element('css selector', 'a').get_attribute('href')
-browser.get(match_url)
-browser.implicitly_wait(4)
+import numpy as np
+import logging
 
 
-def set_row(columns, values):    
-    for col, value in zip(columns, values):
-        lst_idx = stats_df_clean.last_valid_index()
-        lst_idx = lst_idx+1 if lst_idx is not None else 0
-        stats_df_clean.loc[match_id, col] = value
+class Scrapper:
+    def __init__(self, year, from_date, initial_mid=1, gender='women') -> None:
+        self.start_uri = f"https://en.volleyballworld.com/volleyball/competitions/volleyball-nations-league/{year}/schedule/#fromDate={from_date}1&gender={gender}"
+        self.match_id = initial_mid
+
+        self.stats_dataframe = pd.DataFrame()
+        self.stats_dataframe_name = f'match_stats_{year}_{datetime.now().date()}.xlsx'
+
+        self.players_dataframe = pd.DataFrame()
+        self.players_dataframe_name = f'players_stats_{year}_{datetime.now().date()}.xlsx'
 
 
-stats_dataframes = pd.DataFrame()
-while True:
-    pool, phase, matchN = browser.find_element('xpath', '//*[@id="main-content"]/section/div/div/div[2]/div/a[1]/div[2]/div[1]').text.split(' - ')
-    pool = re.sub('\D+', '', pool)
-    matchN = re.sub('\D+', '', matchN)
+        options = Options()
+        service = Service('msedgedriver.exe')
+        
+        self.browser = Edge(options=options, service=service)
 
-    arena = re.sub(
-        r'\n', 
-        '-', 
-        browser.find_element('xpath', '//*[@id="main-content"]/section/div/div/div[2]/div/a[1]/div[2]/div[3]').text
-    )
+        self.all_match_links = []
 
-    home_team = browser.find_element('xpath', '//*[@id="main-content"]/section/div/div/div[2]/div/a[2]/div[1]/div[1]/div[2]').get_attribute('innerHTML')
-    away_team = browser.find_element('xpath', '//*[@id="main-content"]/section/div/div/div[2]/div/a[2]/div[1]/div[3]/div[2]').get_attribute('innerHTML')
+        logging.getLogger('selenium').setLevel(logging.CRITICAL)
+        logging.getLogger('urllib3').setLevel(logging.CRITICAL)
+        self.logger = logging.getLogger(__name__)
+        logging.basicConfig(
+            format="%(asctime)s :: %(levelname)s :: %(module)s.%(funcName)s :: %(message)s",
+            encoding='utf-8',
+            level=logging.DEBUG,
+            filename='logs.log',
+            filemode='a'
+        )
 
-    home_res, away_res = browser.find_element('xpath', '//*[@id="main-content"]/section/div/div/div[2]/div/a[2]/div[1]/div[2]/div[1]').text.split('\n:\n')
+    def run(self):
+        self.browser.get(self.start_uri)
+        self.browser.maximize_window()
 
-    table = browser.find_element('xpath', '/html/body/div[1]/main/div/section/div/div[1]/div[1]/div[2]/div/table')
-    stats_table = pd.read_html(table.get_attribute('outerHTML'))[0]
+        self.close_cookie_request()
+        self.browser.implicitly_wait(5)
+        
+        self.get_match_links()
+        self.parse_matches()
 
-    stats_colsA = (stats_table['Match StatsStats'] + ' A').tolist()
-    stats_colsB = (stats_table['Match StatsStats'] + ' B').tolist()
-    stats_colsA[-1] = stats_colsA[-1]+'2'
-    stats_colsB[-1] =  stats_colsB[-1]+'2'
+        self.save_dfs()
 
-    stats_df_clean = pd.DataFrame(columns=[*stats_colsA, *stats_colsB])
+    def quit_browser(self):
+        self.browser.quit()
+        self.logger.info('Browser quitted')
+    
+    def set_row(self, df, columns, values, mid):    
+        for col, value in zip(columns, values):
+            self.logger.debug(f'setting "{value}" to column "{col}" on match_id {mid}')
 
-    stats_df_clean.loc[match_id, 'match_id'] = match_id
-    stats_df_clean.loc[match_id, 'home'] = home_team
-    stats_df_clean.loc[match_id, 'away'] = away_team
-    stats_df_clean.loc[match_id, 'home_res'] = home_res
-    stats_df_clean.loc[match_id, 'away_res'] = away_res
+            lst_idx = df.last_valid_index()
+            lst_idx = lst_idx+1 if lst_idx is not None else 0
+            df.loc[mid, col] = value
 
-    stats_df_clean.loc[match_id, 'pool'] = pool
-    stats_df_clean.loc[match_id, 'phase'] = phase
-    stats_df_clean.loc[match_id, 'matchN'] = matchN
-    stats_df_clean.loc[match_id, 'arena'] = arena
-    set_row(stats_colsA, stats_table.iloc[:,1])
-    set_row(stats_colsB, stats_table.iloc[:,3])
+    def find_waiting(self, by, value, condition=EC.presence_of_element_located, timeout=30, ignored_exceptions=None):
+        wait = WebDriverWait(
+            self.browser, 
+            timeout=timeout,
+            ignored_exceptions=ignored_exceptions
+        )
+        element = wait.until(condition((by, value)))
+        return element
+    
+    def close_cookie_request(self):
+        self.browser.execute_script(
+            'arguments[0].click();',
+            self.find_waiting('xpath', '//*[@id="onetrust-close-btn-container"]/button')
+        )
+        self.logger.info('cookies request closed')
 
-    stats_dataframes = pd.concat([stats_dataframes, stats_df_clean], axis=0)
+    def get_match_links(self):
+        MAX_NON_DATA = 2
+        non_data_count = 0
+        p = 1
+        while True:
+            self.logger.info(f'getting cards from page {p}')
+            sleep(5)
 
-    upcomming = browser.find_element('xpath', '//*[@id="main-content"]/div/section/div/div[2]/section/div[2]/div[1]/div/div[1]/a').get_attribute('innerHTML')
-    if upcomming != 'Match Centre':
-        break
+            count_gt_2 = non_data_count > MAX_NON_DATA
+            self.logger.debug(f'non_data_count: {non_data_count} - non_data_count > {MAX_NON_DATA} = {count_gt_2}')
+            if count_gt_2:
+                break
+            
+            elements = self.find_waiting(
+                'css selector', 
+                'div.vbw-gs2-match-data-card', 
+                EC.presence_of_all_elements_located
+            )
+            self.logger.debug(f'elements found {len(elements)}')
+            try:
+                match_links = []
+                for card in elements:
+                    match_gender = card.find_element(By.CLASS_NAME, 'vbw-gs2-match-gender').text
+                    if match_gender.lower() != 'women':
+                        continue
 
-    match_id += 1
-    browser.execute_script(
-        'arguments[0].click();',
-        browser.find_element('xpath', '//*[@id="main-content"]/div/section/div/div[2]/section/div[2]/div[1]/div/div[1]/a')
-    )
-    browser.implicitly_wait(3)
+                    link = card.find_element('css selector', 'a').get_attribute('href')
+                    match_links.append(link)
 
-stats_dataframes.to_excel('match_stats.xlsx')
-browser.quit()
+        
+                self.logger.debug(f'women links: {len(match_links)}')
+
+            except StaleElementReferenceException as e:
+                self.logger.info(str(e))
+                continue
+
+            if match_links:
+                self.all_match_links += match_links
+                non_data_count = 0
+            
+            else:
+                non_data_count += 1
+
+            self.logger.debug(f'all_match_links count: {len(self.all_match_links)}')
+            
+            next_page = self.find_waiting(
+                'xpath', 
+                '/html/body/div[1]/main/section/div[3]/div/div/div[1]/div[2]/div[2]/div/div',
+            )
+            self.browser.execute_script('arguments[0].click();', next_page)
+            self.logger.info('going next page')
+
+            p+=1
+        
+        self.logger.info(f'{len(self.all_match_links)} matches found')
+
+    def parse_matches(self):
+        for mid, match_url in enumerate(self.all_match_links, self.match_id):
+            self.browser.get(match_url)    
+            self.browser.implicitly_wait(5)
+
+            pool, phase, matchN = self.find_waiting(
+                'xpath', 
+                '//*[@id="main-content"]/section/div/div/div[2]/div/a[1]/div[2]/div[1]'
+            ).text.split(' - ')
+
+            pool = re.sub('\D+', '', pool)
+            matchN = re.sub('\D+', '', matchN)
+            arena = re.sub(
+                r'\n', 
+                '-', 
+                self.find_waiting('xpath', '//*[@id="main-content"]/section/div/div/div[2]/div/a[1]/div[2]/div[3]').text
+            )
+            self.logger.debug(f'pool={pool} - phase={phase} - matchN={matchN} - arena={arena}')
+            
+            home_team = self.find_waiting('xpath', '//*[@id="main-content"]/section/div/div/div[2]/div/a[2]/div[1]/div[1]/div[2]').get_attribute('innerHTML')
+            away_team = self.find_waiting('xpath', '//*[@id="main-content"]/section/div/div/div[2]/div/a[2]/div[1]/div[3]/div[2]').get_attribute('innerHTML')
+            self.logger.debug(f'home_team={home_team} - away_team={away_team}')
+
+            home_res, away_res = self.find_waiting('xpath', '//*[@id="main-content"]/section/div/div/div[2]/div/a[2]/div[1]/div[2]/div[1]').text.split('\n:\n')
+            self.logger.debug(f'home_res={home_res} - away_res={away_res}')
+
+            table = self.find_waiting('xpath', '/html/body/div[1]/main/div/section/div/div[1]/div[1]/div[2]/div/table')
+            self.logger.debug(f'table element={table}')
+
+            stats_table = pd.read_html(table.get_attribute('outerHTML'))[0]
+            self.logger.debug(stats_table.head(1))
+
+            stats_colsA = (stats_table['Match StatsStats'] + ' H').tolist()
+            stats_colsB = (stats_table['Match StatsStats'] + ' A').tolist()
+            stats_colsA[-1] = stats_colsA[-1]+'2'
+            stats_colsB[-1] =  stats_colsB[-1]+'2'
+
+            stats_df_clean = pd.DataFrame(columns=[*stats_colsA, *stats_colsB])
+
+            stats_df_clean.loc[mid, 'match_id'] = mid
+            stats_df_clean.loc[mid, 'home'] = home_team
+            stats_df_clean.loc[mid, 'away'] = away_team
+            stats_df_clean.loc[mid, 'home_res'] = home_res
+            stats_df_clean.loc[mid, 'away_res'] = away_res
+
+            stats_df_clean.loc[mid, 'pool'] = pool
+            stats_df_clean.loc[mid, 'phase'] = phase
+            stats_df_clean.loc[mid, 'matchN'] = matchN
+            stats_df_clean.loc[mid, 'arena'] = arena
+            self.set_row(stats_df_clean, stats_colsA, stats_table.iloc[:,1], mid)
+            self.set_row(stats_df_clean, stats_colsB, stats_table.iloc[:,3], mid)
+
+            self.stats_dataframe = pd.concat([self.stats_dataframe, stats_df_clean], axis=0)
+            self.logger.info(f'stats_dataframe from match_id {mid} concatenated')
+            self.logger.debug(self.stats_dataframe.head(1))
+
+            # parte de players
+            self.browser.execute_script(
+                'arguments[0].click();', 
+                self.find_waiting('xpath', '/html/body/div[1]/main/div/section/div/div[1]/div[1]/div[1]/ul/li[2]/a')
+            )
+
+            box_tables = self.find_waiting(
+                'xpath', 
+                '//*[@id="main-content"]/div/section/div/div[1]/div[1]/div[3]/div/div[2]/div/div[2]/div/div/table',
+                EC.presence_of_all_elements_located
+            )
+            box_dfs = []
+            for t in box_tables:
+                box_dfs.append(
+                    pd.read_html(t.get_attribute('outerHTML'))[0]
+                )
+            self.logger.info(f'{len(box_dfs)} box_dfs found')
+            
+            piv = len(box_dfs)//2
+            dfs_A = box_dfs[:piv]
+            dfs_B = box_dfs[piv:]
+
+            cat = np.array(
+                [
+                    'SCORING',
+                    'ATTACK',
+                    'BLOCK',
+                    'SERVE',
+                    'RECEPTION',
+                    'DIG',
+                    'SET',
+                ], 
+                dtype=np.object_
+            )
+
+            df_a_join = pd.DataFrame()
+            df_b_join = pd.DataFrame()
+            for i in range(7):
+                df_a, df_b = dfs_A[i], dfs_B[i]
+                cols_a, cols_b = df_a.columns + f'_{cat[i]}_H', df_b.columns + f'_{cat[i]}_A'
+
+                df_a.columns, df_b.columns = cols_a, cols_b
+                df_a, df_b = df_a.set_index(cols_a[1]), df_b.set_index(cols_b[1])
+                
+                if i == 0:
+                    df_a_join = df_a
+                    df_b_join = df_b
+                else:
+                    df_a_join = df_a_join.join(df_a, how='inner')
+                    df_b_join = df_b_join.join(df_b, how='inner')
+            
+            df_a_join['team_H'] = home_team
+            df_b_join['team_A'] = away_team
+
+            self.logger.info(f'dfs from {home_team} x {away_team} complete')
+
+            self.players_df_conc = pd.concat([df_a_join.reset_index(inplace=False), df_b_join.reset_index(inplace=False)], axis=1)
+            self.players_df_conc['match_id'] = mid
+            self.players_dataframe = pd.concat([self.players_dataframe, self.players_df_conc])
+            self.logger.info('players_dataframe concatenated')
+            self.logger.info(self.players_dataframe.head(1))
+
+            self.browser.implicitly_wait(5)
+
+    def save_dfs(self) -> bool:
+        try:
+            self.stats_dataframe.to_excel(self.stats_dataframe_name)
+            self.logger.info(f'{self.stats_dataframe_name} saved')
+
+            self.players_dataframe.to_excel(self.players_dataframe_name)
+            self.logger.info(f'{self.players_dataframe_name} saved')
+            return True
+        
+        except Exception as e:
+            self.logger.error(str(e))
+            return False
+
+
+if __name__ == '__main__':
+    app = Scrapper(year=2023, from_date='2023-05-30')
+    try:
+        app.run()
+    finally:
+        app.quit_browser()
