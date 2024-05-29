@@ -24,6 +24,7 @@ class Scraper:
             from_date (str): initial date.
             initial_mid (int, optional): initial match id. Defaults to 1.
             gender (Literal['men', 'woman'], optional): the gender to scrap. Defaults to 'women'.
+            headless (bool, optional): if true launch browser in headless mode
         
         Ex:
         >>> scraper = Scraper(2023, '2023-05-30', gender='men')
@@ -353,5 +354,5 @@ class Scraper:
         >>> Scraper.multiple_years(years=[2021, 2022], dates=['2021-05-25', '2022-05-31'])
         """
         for year, date in zip(years, dates):
-            self = cls(year=year, date=date, **kwargs)
+            self = cls(year=year, from_date=date, **kwargs)
             self.run()
