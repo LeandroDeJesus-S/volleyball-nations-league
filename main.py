@@ -15,7 +15,7 @@ import numpy as np
 import logging
 
 
-class Scrapper:
+class Scraper:
     VALID_GENDERS = ('men', 'women')
     def __init__(self, year: int, from_date: str, initial_mid: int=1, gender: Literal['men', 'woman']='women') -> None:
         """
@@ -26,7 +26,7 @@ class Scrapper:
             gender (Literal['men', 'woman'], optional): the gender to scrap. Defaults to 'women'.
         
         Ex:
-        >>> scrapper = Scrapper(2023, '2023-05-30', gender='men')
+        >>> scraper = Scraper(2023, '2023-05-30', gender='men')
         """
         if gender not in self.VALID_GENDERS:
             raise ValueError(f'gender argument must be in {self.VALID_GENDERS}')
@@ -63,8 +63,8 @@ class Scrapper:
         """Run the program calling all the functions
 
         Ex:
-        >>> scrapper = Scrapper(2023, '2023-05-30')
-        >>> scrapper.run()
+        >>> scraper = Scraper(2023, '2023-05-30')
+        >>> scraper.run()
         """
         self.browser.get(self.start_uri)
         self.browser.maximize_window()
@@ -340,7 +340,7 @@ class Scrapper:
 
 
 if __name__ == '__main__':
-    app = Scrapper(year=2023, from_date='2023-05-30', initial_mid=229)
+    app = Scraper(year=2023, from_date='2023-05-30', initial_mid=229)
     try:
         app.run()
     finally:
