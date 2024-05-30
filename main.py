@@ -2,11 +2,12 @@ from selenium.webdriver import Edge
 from selenium.webdriver.edge.options import Options
 from selenium.webdriver.edge.service import Service
 import selenium.webdriver.support.expected_conditions as EC
-from selenium.webdriver.support.wait import WebDriverWait
+from selenium.webdriver.support.wait import WebDriverWait, T
 from selenium.webdriver.common.by import By
 from selenium.common.exceptions import StaleElementReferenceException
 from datetime import datetime
 from time import sleep
+from typing import Literal, Any, Callable
 
 import re
 import pandas as pd
@@ -14,19 +15,37 @@ import numpy as np
 import logging
 
 
-class Scrapper:
-    def __init__(self, year, from_date, initial_mid=1, gender='women') -> None:
-        self.start_uri = f"https://en.volleyballworld.com/volleyball/competitions/volleyball-nations-league/{year}/schedule/#fromDate={from_date}1&gender={gender}"
+class Scraper:
+    VALID_GENDERS = ('men', 'women')
+    def __init__(self, year: int, from_date: str, initial_mid: int=1, gender: Literal['men', 'woman']='women', headless=True) -> None:
+        """
+        Args:
+            year (int): year of the competition.
+            from_date (str): initial date.
+            initial_mid (int, optional): initial match id. Defaults to 1.
+            gender (Literal['men', 'woman'], optional): the gender to scrap. Defaults to 'women'.
+            headless (bool, optional): if true launch browser in headless mode
+        
+        Ex:
+        >>> scraper = Scraper(2023, '2023-05-30', gender='men')
+        """
+        if gender not in self.VALID_GENDERS:
+            raise ValueError(f'gender argument must be in {self.VALID_GENDERS}')
+        
+        self.start_uri = f"https://en.volleyballworld.com/volleyball/competitions/volleyball-nations-league/{year}/schedule/#fromDate={from_date}&gender={gender}"
         self.match_id = initial_mid
+        self.gender = gender
 
         self.stats_dataframe = pd.DataFrame()
-        self.stats_dataframe_name = f'match_stats_{year}_{datetime.now().date()}.xlsx'
+        self.stats_dataframe_name = f'{self.gender}_match_stats_{year}_{datetime.now().date()}.xlsx'
 
         self.players_dataframe = pd.DataFrame()
-        self.players_dataframe_name = f'players_stats_{year}_{datetime.now().date()}.xlsx'
-
+        self.players_dataframe_name = f'{self.gender}_players_stats_{year}_{datetime.now().date()}.xlsx'
 
         options = Options()
+        if headless:
+            options.add_argument('--headless')
+        
         service = Service('msedgedriver.exe')
         
         self.browser = Edge(options=options, service=service)
@@ -44,23 +63,40 @@ class Scrapper:
             filemode='a'
         )
 
-    def run(self):
+    def run(self) -> None:
+        """Run the program calling all the functions
+
+        Ex:
+        >>> scraper = Scraper(2023, '2023-05-30')
+        >>> scraper.run()
+        """
         self.browser.get(self.start_uri)
         self.browser.maximize_window()
 
         self.close_cookie_request()
-        self.browser.implicitly_wait(5)
         
         self.get_match_links()
         self.parse_matches()
 
         self.save_dfs()
 
-    def quit_browser(self):
+    def quit_browser(self) -> None:
+        """Closes the browser and shuts down the WebDriver executable.
+        """
         self.browser.quit()
         self.logger.info('Browser quitted')
     
-    def set_row(self, df, columns, values, mid):    
+    def set_row(self, df: pd.DataFrame, columns: np.ndarray, values: Any, mid: int) -> None:
+        """Set sent values to the columns on index == mid
+        like:
+            df.loc[mid, col] = value
+
+        Args:
+            df (pd.DataFrame): a pandas dataframe object.
+            columns (np.ndarray): the dataframe columns that will be receive the values.
+            values (Any): values to be inserted
+            mid (int): the match_id that will be used as index.
+        """
         for col, value in zip(columns, values):
             self.logger.debug(f'setting "{value}" to column "{col}" on match_id {mid}')
 
@@ -68,7 +104,30 @@ class Scrapper:
             lst_idx = lst_idx+1 if lst_idx is not None else 0
             df.loc[mid, col] = value
 
-    def find_waiting(self, by, value, condition=EC.presence_of_element_located, timeout=30, ignored_exceptions=None):
+    def find_waiting(self, by: str, value: str, condition: Callable=EC.presence_of_element_located, timeout: int=30, ignored_exceptions: list[Exception]=None) -> T:
+        """Uses WebDriverWait object to find elements
+
+        Args:
+            by (str): selenium.webdriver.common.by.By object
+            value (str): value of DOM element search
+            condition (Callable, optional): callable from selenium.webdriver.support.expected_conditions . Defaults to EC.presence_of_element_located.
+            timeout (int, optional): max timeout to wait. Defaults to 30.
+            ignored_exceptions (List[Exception], optional): exceptions to ignore. Defaults to None.
+        
+        Ex:
+        >>> button = find_waiting(
+            'xpath', 
+            '//*[@id="onetrust-close-btn-container"]/button', 
+            timeout=10,
+            condition=EC.element_to_be_clickable
+        )
+        >>> elements = find_waiting(
+            'xpath', 
+            '//*[@id="onetrust-close-btn-container"]/button', 
+            timeout=10,
+            condition=EC.presence_of_all_elements_located
+        )
+        """
         wait = WebDriverWait(
             self.browser, 
             timeout=timeout,
@@ -77,14 +136,18 @@ class Scrapper:
         element = wait.until(condition((by, value)))
         return element
     
-    def close_cookie_request(self):
+    def close_cookie_request(self) -> None:
+        """Close the cookies popup
+        """
         self.browser.execute_script(
             'arguments[0].click();',
             self.find_waiting('xpath', '//*[@id="onetrust-close-btn-container"]/button')
         )
         self.logger.info('cookies request closed')
 
-    def get_match_links(self):
+    def get_match_links(self) -> None:
+        """Get the the link of all matches appending to self.all_match_links.
+        """
         MAX_NON_DATA = 2
         non_data_count = 0
         p = 1
@@ -107,14 +170,14 @@ class Scrapper:
                 match_links = []
                 for card in elements:
                     match_gender = card.find_element(By.CLASS_NAME, 'vbw-gs2-match-gender').text
-                    if match_gender.lower() != 'women':
+                    if match_gender.lower() != self.gender:
                         continue
 
                     link = card.find_element('css selector', 'a').get_attribute('href')
                     match_links.append(link)
 
         
-                self.logger.debug(f'women links: {len(match_links)}')
+                self.logger.debug(f'{self.gender} links: {len(match_links)}')
 
             except StaleElementReferenceException as e:
                 self.logger.info(str(e))
@@ -140,17 +203,20 @@ class Scrapper:
         
         self.logger.info(f'{len(self.all_match_links)} matches found')
 
-    def parse_matches(self):
+    def parse_matches(self) -> None:
+        """Get the stats from the match and players making self.stats_dataframe 
+        and self.players_dataframe
+        """
         for mid, match_url in enumerate(self.all_match_links, self.match_id):
-            self.browser.get(match_url)    
-            self.browser.implicitly_wait(5)
-
+            self.browser.get(match_url)
+            sleep(3)
+            
             pool, phase, matchN = self.find_waiting(
                 'xpath', 
                 '//*[@id="main-content"]/section/div/div/div[2]/div/a[1]/div[2]/div[1]'
             ).text.split(' - ')
 
-            pool = re.sub('\D+', '', pool)
+            pool = pool.replace('Pool ', '')
             matchN = re.sub('\D+', '', matchN)
             arena = re.sub(
                 r'\n', 
@@ -258,9 +324,12 @@ class Scrapper:
             self.logger.info('players_dataframe concatenated')
             self.logger.info(self.players_dataframe.head(1))
 
-            self.browser.implicitly_wait(5)
-
     def save_dfs(self) -> bool:
+        """Save the DataFrame from scraped data to excel format;
+
+        Returns:
+            bool: True if saved with success else False.
+        """
         try:
             self.stats_dataframe.to_excel(self.stats_dataframe_name)
             self.logger.info(f'{self.stats_dataframe_name} saved')
@@ -273,10 +342,17 @@ class Scrapper:
             self.logger.error(str(e))
             return False
 
+    @classmethod
+    def multiple_years(cls, years: list[int], dates: list[str], **kwargs):
+        """Scrape data for multiple years.
 
-if __name__ == '__main__':
-    app = Scrapper(year=2023, from_date='2023-05-30')
-    try:
-        app.run()
-    finally:
-        app.quit_browser()
+        Args:
+            years (list[int]): list of the years
+            dates (list[str]): list of initial dates
+        
+        Ex:
+        >>> Scraper.multiple_years(years=[2021, 2022], dates=['2021-05-25', '2022-05-31'])
+        """
+        for year, date in zip(years, dates):
+            self = cls(year=year, from_date=date, **kwargs)
+            self.run()
