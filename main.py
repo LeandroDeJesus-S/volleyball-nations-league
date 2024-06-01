@@ -496,6 +496,14 @@ class Scraper:
         self.players_dataframe.dropna(axis=1, how='all', inplace=True)
         self.players_dataframe.fillna(0, inplace=True)
 
+    def cast_cols(self):
+        col_cast_type = {
+            col: np.int32 
+            for col in self.players_dataframe.columns 
+            if self.players_dataframe[col].dtype == 'float64' and not col.startswith('Efficiency ')
+        }
+        self.players_dataframe = self.players_dataframe.astype(col_cast_type, errors='ignore')
+
     def save_dfs(self) -> bool:
         """Save the DataFrame from scraped data to excel format;
 
