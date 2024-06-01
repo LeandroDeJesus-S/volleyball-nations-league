@@ -453,6 +453,49 @@ class Scraper:
             getattr(self, dfname).columns = getattr(self, colsname)
             self.logger.info(f'columns from {dfname} renamed with success')
 
+    def drop_columns(self) -> None:
+        """drop unnecessary columns from dataframes
+        """
+        pcols = self.players_dataframe.columns[self.players_dataframe.columns.str.startswith('Position')]
+        pcols_todrop = pcols[pcols.str.endswith('_H')][1:].tolist() + pcols[pcols.str.endswith('_A')][1:].tolist()
+
+        pcols_todrop = [
+            'Player No_ATTACK_H',
+            'Player No_BLOCK_H',
+            'Player No_SERVE_H',
+            'Player No_RECEPTION_H',
+            'Player No_DIG_H',
+            'Player No_SET_H',
+            'Player No_ATTACK_A',
+            'Player No_BLOCK_A',
+            'Player No_SERVE_A',
+            'Player No_RECEPTION_A',
+            'Player No_DIG_A',
+            'Player No_SET_A',
+            *pcols_todrop
+        ]
+        self.players_dataframe.drop(columns=pcols_todrop, inplace=True)
+
+        mcols_todrop = ['Match Skills H', 'Match Skills A']
+        self.matches_dataframe.drop(columns=mcols_todrop, inplace=True)
+
+    def fill_missings(self) -> None:
+        for mid in range(self.players_dataframe.match_id.min(), self.players_dataframe.match_id.max()+1):
+            mask = self.players_dataframe.match_id == mid
+            dfi = self.players_dataframe.loc[mask][['players_H', 'players_A', 'team_H', 'team_A']]
+            team_H = dfi['team_H'].loc[~dfi['team_H'].isna()].iloc[0]
+            team_A = dfi['team_A'].loc[~dfi['team_A'].isna()].iloc[0]
+
+            self.players_dataframe.loc[(self.players_dataframe['team_H'].isna() & mask), 'team_H'] = team_H
+            self.players_dataframe.loc[(self.players_dataframe['team_A'].isna() & mask), 'team_A'] = team_A
+
+            obj_cols = [col for col in self.players_dataframe.columns if self.players_dataframe[col].dtype == 'object']
+            self.players_dataframe.loc[mask, obj_cols] = self.players_dataframe.loc[mask, obj_cols].fillna('N/A')
+        
+        self.players_dataframe.fillna({'Player No_H': -1, 'Player No_A': -1}, inplace=True)
+        self.players_dataframe.dropna(axis=1, how='all', inplace=True)
+        self.players_dataframe.fillna(0, inplace=True)
+
     def save_dfs(self) -> bool:
         """Save the DataFrame from scraped data to excel format;
 
@@ -460,10 +503,10 @@ class Scraper:
             bool: True if saved with success else False.
         """
         try:
-            self.matches_dataframe.to_excel(self.stats_dataframe_name)
+            self.matches_dataframe.to_excel(self.stats_dataframe_name, index=False)
             self.logger.info(f'{self.stats_dataframe_name} saved')
 
-            self.players_dataframe.to_excel(self.players_dataframe_name)
+            self.players_dataframe.to_excel(self.players_dataframe_name, index=False)
             self.logger.info(f'{self.players_dataframe_name} saved')
             return True
         
