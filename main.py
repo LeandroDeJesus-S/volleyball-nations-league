@@ -35,6 +35,7 @@ class Scraper:
         self.start_uri = f"https://en.volleyballworld.com/volleyball/competitions/volleyball-nations-league/{year}/schedule/#fromDate={from_date}&gender={gender}"
         self.match_id = initial_mid
         self.gender = gender
+        self.year = year
 
         self.matches_dataframe = pd.DataFrame()
         self.stats_dataframe_name = f'{self.gender}_match_stats_{year}_{datetime.now().date()}.xlsx'
@@ -511,9 +512,11 @@ class Scraper:
             bool: True if saved with success else False.
         """
         try:
+            self.matches_dataframe['year'] = self.year
             self.matches_dataframe.to_excel(self.stats_dataframe_name, index=False)
             self.logger.info(f'{self.stats_dataframe_name} saved')
 
+            self.players_dataframe['year'] = self.year
             self.players_dataframe.to_excel(self.players_dataframe_name, index=False)
             self.logger.info(f'{self.players_dataframe_name} saved')
             return True
