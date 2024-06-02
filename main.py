@@ -39,7 +39,39 @@ class Scraper:
 
         self.matches_dataframe = pd.DataFrame()
         self.stats_dataframe_name = f'{self.gender}_match_stats_{year}_{datetime.now().date()}.xlsx'
-        self.match_cols = []
+        self.match_cols = [
+            'Attack H', 
+            'Block H', 
+            'Serve H', 
+            'Erros A',
+            'Total H', 
+            'Match Skills H', 
+            'Dig H', 
+            'Reception H', 
+            'Set H',
+            'Best Scorers H', 
+            'Best Scorers H2', 
+            'Attack A', 
+            'Block A', 
+            'Serve A',
+            'Errors H', 
+            'Total A', 
+            'Match Skills A', 
+            'Dig A', 
+            'Reception A',
+            'Set A', 
+            'Best Scorers A', 
+            'Best Scorers A2', 
+            'match_id', 
+            'home',
+            'away', 
+            'home_res', 
+            'away_res', 
+            'pool', 
+            'phase', 
+            'matchN', 
+            'arena'
+        ]
 
         self.players_dataframe = pd.DataFrame()
         self.players_dataframe_name = f'{self.gender}_players_stats_{year}_{datetime.now().date()}.xlsx'
@@ -187,6 +219,10 @@ class Scraper:
         self.parse_matches()
 
         self.rename_columns()
+        self.drop_columns()
+        self.fill_missing()
+        self.cast_cols()
+        
         self.save_dfs()
 
     def quit_browser(self) -> None:
@@ -480,7 +516,7 @@ class Scraper:
         mcols_todrop = ['Match Skills H', 'Match Skills A']
         self.matches_dataframe.drop(columns=mcols_todrop, inplace=True)
 
-    def fill_missings(self) -> None:
+    def fill_missing(self) -> None:
         for mid in range(self.players_dataframe.match_id.min(), self.players_dataframe.match_id.max()+1):
             mask = self.players_dataframe.match_id == mid
             dfi = self.players_dataframe.loc[mask][['players_H', 'players_A', 'team_H', 'team_A']]
