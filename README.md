@@ -21,5 +21,13 @@
 
    The data will be saved as .xlsx files with the pattern ```'{self.gender}_match_stats_{year}_{datetime.now().date()}.xlsx'``` for matches and ```'{self.gender}_players_stats_{year}_{datetime.now().date()}.xlsx'``` for players.
 
+   You also can to scrape multiple years using:
+   ```python
+   Scraper.multiple_years(
+        years=[2021, 2022],
+        dates=['2021-05-25', '2022-05-30']
+   )
+   ```
+
 ## Notes
    It will be necessary to clean the dataframes. Some data, such as team or player names, may be null because some teams have more players than others, and the tables on the website have a lot of missing values.
