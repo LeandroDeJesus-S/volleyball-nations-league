@@ -483,7 +483,7 @@ class Scraper:
             ['matches_dataframe', 'match_cols', dfm_cols_n, mcols_n]
         ]
         for dfname, colsname, dfl, colsl in values:
-            if not dfl != colsl:
+            if dfl != colsl:
                 self.logger.warning(f"can't rename {dfname} df {dfl} != {colsl}")
                 continue
             
@@ -494,7 +494,9 @@ class Scraper:
         """drop unnecessary columns from dataframes
         """
         pcols = self.players_dataframe.columns[self.players_dataframe.columns.str.startswith('Position')]
+        self.logger.debug(f'players cols startswith Position: {pcols}')
         pcols_todrop = pcols[pcols.str.endswith('_H')][1:].tolist() + pcols[pcols.str.endswith('_A')][1:].tolist()
+        self.logger.debug(f'players col to drop: {pcols_todrop}')
 
         pcols_todrop = [
             'Player No_ATTACK_H',
@@ -511,6 +513,8 @@ class Scraper:
             'Player No_SET_A',
             *pcols_todrop
         ]
+        self.logger.debug(f'players col to drop: {pcols_todrop}')
+
         self.players_dataframe.drop(columns=pcols_todrop, inplace=True)
 
         mcols_todrop = ['Match Skills H', 'Match Skills A']
@@ -575,3 +579,6 @@ class Scraper:
         for year, date in zip(years, dates):
             self = cls(year=year, from_date=date, **kwargs)
             self.run()
+
+
+Scraper.multiple_years(years=[2021, 2022, 2023], dates=['2021-05-25', '2022-05-31', '2023-05-30'])
