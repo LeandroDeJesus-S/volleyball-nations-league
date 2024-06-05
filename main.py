@@ -35,13 +35,153 @@ class Scraper:
         self.start_uri = f"https://en.volleyballworld.com/volleyball/competitions/volleyball-nations-league/{year}/schedule/#fromDate={from_date}&gender={gender}"
         self.match_id = initial_mid
         self.gender = gender
+        self.year = year
 
-        self.stats_dataframe = pd.DataFrame()
+        self.matches_dataframe = pd.DataFrame()
         self.stats_dataframe_name = f'{self.gender}_match_stats_{year}_{datetime.now().date()}.xlsx'
+        self.match_cols = [
+            'Attack H', 
+            'Block H', 
+            'Serve H', 
+            'Erros A',
+            'Total H', 
+            'Match Skills H', 
+            'Dig H', 
+            'Reception H', 
+            'Set H',
+            'Best Scorers H', 
+            'Best Scorers H2', 
+            'Attack A', 
+            'Block A', 
+            'Serve A',
+            'Errors H', 
+            'Total A', 
+            'Match Skills A', 
+            'Dig A', 
+            'Reception A',
+            'Set A', 
+            'Best Scorers A', 
+            'Best Scorers A2', 
+            'match_id', 
+            'home',
+            'away', 
+            'home_res', 
+            'away_res', 
+            'pool', 
+            'phase', 
+            'matchN', 
+            'arena'
+        ]
 
         self.players_dataframe = pd.DataFrame()
         self.players_dataframe_name = f'{self.gender}_players_stats_{year}_{datetime.now().date()}.xlsx'
-
+        self.players_cols = [
+            'players_H',
+            'Player No_H',
+            'Position_H',
+            'Total ABS_SCORING_H',
+            'Attack Points_SCORING_H',
+            'Block Points_SCORING_H',
+            'Serve Points_SCORING_H',
+            'Errors_SCORING_H',
+            'Efficiency %_SCORING_H',
+            'Player No_ATTACK_H',
+            'Position_ATTACK_H',
+            'Point_ATTACK_H',
+            'Errors_ATTACK_H',
+            'Attempts_ATTACK_H',
+            'Total_ATTACK_H',
+            'Efficiency %_ATTACK_H',
+            'Player No_BLOCK_H',
+            'Position_BLOCK_H',
+            'Point_BLOCK_H',
+            'Errors_BLOCK_H',
+            'Touches_BLOCK_H',
+            'Total_BLOCK_H',
+            'Efficiency %_BLOCK_H',
+            'Player No_SERVE_H',
+            'Position_SERVE_H',
+            'Point_SERVE_H',
+            'Errors_SERVE_H',
+            'Attempts_SERVE_H',
+            'Total_SERVE_H',
+            'Efficiency %_SERVE_H',
+            'Player No_RECEPTION_H',
+            'Position_RECEPTION_H',
+            'Successful_RECEPTION_H',
+            'Errors_RECEPTION_H',
+            'Attempts_RECEPTION_H',
+            'Total_RECEPTION_H',
+            'Efficiency %_RECEPTION_H',
+            'Player No_DIG_H',
+            'Position_DIG_H',
+            'DigsDig_DIG_H',
+            'Errors_DIG_H',
+            'Total_DIG_H',
+            'Efficiency %_DIG_H',
+            'Player No_SET_H',
+            'Position_SET_H',
+            'Point_SET_H',
+            'Errors_SET_H',
+            'Attempts_SET_H',
+            'Total_SET_H',
+            'Efficiency %_SET_H',
+            'team_H',
+            
+            'players_A',
+            'Player No_A',
+            'Position_A',
+            'Total ABS_SCORING_A',
+            'Attack Points_SCORING_A',
+            'Block Points_SCORING_A',
+            'Serve Points_SCORING_A',
+            'Errors_SCORING_A',
+            'Efficiency %_SCORING_A',
+            'Player No_ATTACK_A',
+            'Position_ATTACK_A',
+            'Point_ATTACK_A',
+            'Errors_ATTACK_A',
+            'Attempts_ATTACK_A',
+            'Total_ATTACK_A',
+            'Efficiency %_ATTACK_A',
+            'Player No_BLOCK_A',
+            'Position_BLOCK_A',
+            'Point_BLOCK_A',
+            'Errors_BLOCK_A',
+            'Touches_BLOCK_A',
+            'Total_BLOCK_A',
+            'Efficiency %_BLOCK_A',
+            'Player No_SERVE_A',
+            'Position_SERVE_A',
+            'Point_SERVE_A',
+            'Errors_SERVE_A',
+            'Attempts_SERVE_A',
+            'Total_SERVE_A',
+            'Efficiency %_SERVE_A',
+            'Player No_RECEPTION_A',
+            'Position_RECEPTION_A',
+            'Successful_RECEPTION_A',
+            'Errors_RECEPTION_A',
+            'Attempts_RECEPTION_A',
+            'Total_RECEPTION_A',
+            'Efficiency %_RECEPTION_A',
+            'Player No_DIG_A',
+            'Position_DIG_A',
+            'DigsDig_DIG_A',
+            'Errors_DIG_A',
+            'Total_DIG_A',
+            'Efficiency %_DIG_A',
+            'Player No_SET_A',
+            'Position_SET_A',
+            'Point_SET_A',
+            'Errors_SET_A',
+            'Attempts_SET_A',
+            'Total_SET_A',
+            'Efficiency %_SET_A',
+            'team_A',
+            'match_id',
+        ]
+        
         options = Options()
         if headless:
             options.add_argument('--headless')
@@ -78,6 +218,11 @@ class Scraper:
         self.get_match_links()
         self.parse_matches()
 
+        self.rename_columns()
+        self.drop_columns()
+        self.fill_missing()
+        self.cast_cols()
+        
         self.save_dfs()
 
     def quit_browser(self) -> None:
@@ -258,9 +403,9 @@ class Scraper:
             self.set_row(stats_df_clean, stats_colsA, stats_table.iloc[:,1], mid)
             self.set_row(stats_df_clean, stats_colsB, stats_table.iloc[:,3], mid)
 
-            self.stats_dataframe = pd.concat([self.stats_dataframe, stats_df_clean], axis=0)
+            self.matches_dataframe = pd.concat([self.matches_dataframe, stats_df_clean], axis=0)
             self.logger.info(f'stats_dataframe from match_id {mid} concatenated')
-            self.logger.debug(self.stats_dataframe.head(1))
+            self.logger.debug(self.matches_dataframe.head(1))
 
             # parte de players
             self.browser.execute_script(
@@ -323,6 +468,82 @@ class Scraper:
             self.players_dataframe = pd.concat([self.players_dataframe, self.players_df_conc])
             self.logger.info('players_dataframe concatenated')
             self.logger.info(self.players_dataframe.head(1))
+    
+    def rename_columns(self) -> None:
+        """rename the dataframes column if they have the same length
+        """
+        dfp_cols_n = self.players_dataframe.columns.shape[0]
+        pcols_n = len(self.players_cols)
+
+        dfm_cols_n = self.matches_dataframe.columns.shape[0]
+        mcols_n = len(self.match_cols)
+
+        values = [
+            ['players_dataframe', 'players_cols', dfp_cols_n, pcols_n],
+            ['matches_dataframe', 'match_cols', dfm_cols_n, mcols_n]
+        ]
+        for dfname, colsname, dfl, colsl in values:
+            if dfl != colsl:
+                self.logger.warning(f"can't rename {dfname} df {dfl} != {colsl}")
+                continue
+            
+            getattr(self, dfname).columns = getattr(self, colsname)
+            self.logger.info(f'columns from {dfname} renamed with success')
+
+    def drop_columns(self) -> None:
+        """drop unnecessary columns from dataframes
+        """
+        pcols = self.players_dataframe.columns[self.players_dataframe.columns.str.startswith('Position')]
+        self.logger.debug(f'players cols startswith Position: {pcols}')
+        pcols_todrop = pcols[pcols.str.endswith('_H')][1:].tolist() + pcols[pcols.str.endswith('_A')][1:].tolist()
+        self.logger.debug(f'players col to drop: {pcols_todrop}')
+
+        pcols_todrop = [
+            'Player No_ATTACK_H',
+            'Player No_BLOCK_H',
+            'Player No_SERVE_H',
+            'Player No_RECEPTION_H',
+            'Player No_DIG_H',
+            'Player No_SET_H',
+            'Player No_ATTACK_A',
+            'Player No_BLOCK_A',
+            'Player No_SERVE_A',
+            'Player No_RECEPTION_A',
+            'Player No_DIG_A',
+            'Player No_SET_A',
+            *pcols_todrop
+        ]
+        self.logger.debug(f'players col to drop: {pcols_todrop}')
+
+        self.players_dataframe.drop(columns=pcols_todrop, inplace=True)
+
+        mcols_todrop = ['Match Skills H', 'Match Skills A']
+        self.matches_dataframe.drop(columns=mcols_todrop, inplace=True)
+
+    def fill_missing(self) -> None:
+        for mid in range(self.players_dataframe.match_id.min(), self.players_dataframe.match_id.max()+1):
+            mask = self.players_dataframe.match_id == mid
+            dfi = self.players_dataframe.loc[mask][['players_H', 'players_A', 'team_H', 'team_A']]
+            team_H = dfi['team_H'].loc[~dfi['team_H'].isna()].iloc[0]
+            team_A = dfi['team_A'].loc[~dfi['team_A'].isna()].iloc[0]
+
+            self.players_dataframe.loc[(self.players_dataframe['team_H'].isna() & mask), 'team_H'] = team_H
+            self.players_dataframe.loc[(self.players_dataframe['team_A'].isna() & mask), 'team_A'] = team_A
+
+            obj_cols = [col for col in self.players_dataframe.columns if self.players_dataframe[col].dtype == 'object']
+            self.players_dataframe.loc[mask, obj_cols] = self.players_dataframe.loc[mask, obj_cols].fillna('N/A')
+        
+        self.players_dataframe.fillna({'Player No_H': -1, 'Player No_A': -1}, inplace=True)
+        self.players_dataframe.dropna(axis=1, how='all', inplace=True)
+        self.players_dataframe.fillna(0, inplace=True)
+
+    def cast_cols(self):
+        col_cast_type = {
+            col: np.int32 
+            for col in self.players_dataframe.columns 
+            if self.players_dataframe[col].dtype == 'float64' and not col.startswith('Efficiency ')
+        }
+        self.players_dataframe = self.players_dataframe.astype(col_cast_type, errors='ignore')
 
     def save_dfs(self) -> bool:
         """Save the DataFrame from scraped data to excel format;
@@ -331,10 +552,12 @@ class Scraper:
             bool: True if saved with success else False.
         """
         try:
-            self.stats_dataframe.to_excel(self.stats_dataframe_name)
+            self.matches_dataframe['year'] = self.year
+            self.matches_dataframe.to_excel(self.stats_dataframe_name, index=False)
             self.logger.info(f'{self.stats_dataframe_name} saved')
 
-            self.players_dataframe.to_excel(self.players_dataframe_name)
+            self.players_dataframe['year'] = self.year
+            self.players_dataframe.to_excel(self.players_dataframe_name, index=False)
             self.logger.info(f'{self.players_dataframe_name} saved')
             return True
         
