@@ -579,6 +579,3 @@ class Scraper:
         for year, date in zip(years, dates):
             self = cls(year=year, from_date=date, **kwargs)
             self.run()
-
-
-Scraper.multiple_years(years=[2021, 2022, 2023], dates=['2021-05-25', '2022-05-31', '2023-05-30'])
