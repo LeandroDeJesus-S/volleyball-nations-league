@@ -43,7 +43,7 @@ class Scraper:
             'Attack H', 
             'Block H', 
             'Serve H', 
-            'Erros A',
+            'Errors A',
             'Total H', 
             'Match Skills H', 
             'Dig H', 
@@ -362,7 +362,7 @@ class Scraper:
             ).text.split(' - ')
 
             pool = pool.replace('Pool ', '')
-            matchN = re.sub('\D+', '', matchN)
+            matchN = re.sub(r'\D+', '', matchN)
             arena = re.sub(
                 r'\n', 
                 '-', 
